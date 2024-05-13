@@ -1,0 +1,174 @@
+#include <LiquidCrystal_I2C.h>
+#define BLYNK_PRINT Serial
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <DHT.h>
+
+// Include the LiquidCrystal_I2C library and define LCD parameters
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// Blynk authentication token and WiFi credentials
+char auth[] = "xKLFgcHUQUg9Lg08_0CZaZRSIkWmY7cy";
+char ssid[] = "k.mani";
+char pass[] = "12345678";
+
+// DHT sensor pin and type
+DHT dht(D4, DHT11);  // DHT sensor pin, DHT11 type
+
+// Timer for Blynk and sensor readings
+BlynkTimer timer;
+
+// Define component pins
+#define soil A0     // Soil Moisture Sensor
+#define PIR D5      // PIR Motion Sensor
+#define RELAY_PIN_1 D3   // Relay
+#define PUSH_BUTTON_1 D7 // Button
+#define VPIN_BUTTON_1 V12 
+#define FAN_RELAY_PIN D6 // Fan Relay
+
+// Initialize relay and button states
+int relay1State = LOW;
+int pushButton1State = HIGH;
+int PIR_ToggleValue;
+int fanRelayState = LOW;
+
+void setup() {
+  Serial.begin(9600);
+  lcd.begin();
+  lcd.backlight();
+  pinMode(PIR, INPUT);
+  pinMode(RELAY_PIN_1, OUTPUT);
+  pinMode(PUSH_BUTTON_1, INPUT_PULLUP);
+  pinMode(FAN_RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN_1, LOW);
+  digitalWrite(FAN_RELAY_PIN, fanRelayState);
+
+  Blynk.begin(auth, ssid, pass, "blynk.cloud", 80);
+  dht.begin();
+
+  lcd.setCursor(0, 0);
+  lcd.print("  Initializing  ");
+  for (int a = 5; a <= 10; a++) {
+    lcd.setCursor(a, 1);
+    lcd.print(".");
+    delay(500);
+  }
+  lcd.clear();
+  lcd.setCursor(11, 1);
+  lcd.print("W:OFF");
+
+  timer.setInterval(100L, soilMoistureSensor);
+  timer.setInterval(100L, DHT11sensor);
+  timer.setInterval(100L, checkPhysicalButton);
+  timer.setInterval(100L, checkTemperature);
+}
+
+void DHT11sensor() {
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+  Blynk.virtualWrite(V0, t);
+  Blynk.virtualWrite(V1, h);
+
+  lcd.setCursor(0, 0);
+  lcd.print("T:");
+  lcd.print(t);
+
+  lcd.setCursor(8, 0);
+  lcd.print("H:");
+  lcd.print(h);
+}
+
+void soilMoistureSensor() {
+  int value = analogRead(soil);
+  value = map(value, 0, 1024, 0, 100);
+  value = (value - 100) * -1;
+
+  Blynk.virtualWrite(V3, value);
+  lcd.setCursor(0, 1);
+  lcd.print("S:");
+  lcd.print(value);
+  lcd.print(" ");
+}
+
+void PIRsensor() {
+  bool value = digitalRead(PIR);
+  if (value) {
+    Blynk.logEvent("pirmotion","WARNING! Motion Detected!");
+    WidgetLED LED(V5);
+    LED.on();
+  } else {
+    WidgetLED LED(V5);
+    LED.off();
+  }  
+}
+
+BLYNK_WRITE(V6) {
+  PIR_ToggleValue = param.asInt();  
+}
+
+BLYNK_CONNECTED() {
+  Blynk.syncVirtual(VPIN_BUTTON_1);
+}
+
+BLYNK_WRITE(VPIN_BUTTON_1) {
+  relay1State = param.asInt();
+  digitalWrite(RELAY_PIN_1, relay1State);
+}
+
+void checkPhysicalButton() {
+  if (digitalRead(PUSH_BUTTON_1) == LOW) {
+    if (pushButton1State != LOW) {
+      relay1State = !relay1State;
+      digitalWrite(RELAY_PIN_1, relay1State);
+      Blynk.virtualWrite(VPIN_BUTTON_1, relay1State);
+    }
+    pushButton1State = LOW;
+  } else {
+    pushButton1State = HIGH;
+  }
+}
+
+void checkTemperature() {
+  float temperature = dht.readTemperature();
+  
+  if (!isnan(temperature) && temperature > 30.0) {
+    digitalWrite(FAN_RELAY_PIN, HIGH);
+    fanRelayState = HIGH;
+    lcd.setCursor(0, 1);
+    lcd.print("Fan: ON ");
+  } else {
+    digitalWrite(FAN_RELAY_PIN, LOW);
+    fanRelayState = LOW;
+    lcd.setCursor(0, 1);
+    lcd.print("Fan: OFF");
+  }
+}
+
+void loop() {
+  if (PIR_ToggleValue == 1) {
+    lcd.setCursor(5, 1);
+    lcd.print("M:ON ");
+    PIRsensor();
+  } else {
+    lcd.setCursor(5, 1);
+    lcd.print("M:OFF");
+    WidgetLED LED(V5);
+    LED.off();
+  }
+
+  if (relay1State == HIGH) {
+    lcd.setCursor(11, 1);
+    lcd.print("W:OFF");
+  } else if (relay1State == LOW) {
+    lcd.setCursor(11, 1);
+    lcd.print("W:ON ");
+  }
+
+  Blynk.run();
+  timer.run();
+}
