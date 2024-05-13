@@ -1,3 +1,9 @@
+//BLNYNK CREDENTIALS
+// shafrin1305@gmail.com
+// Project@123
+
+
+
 #include <LiquidCrystal_I2C.h>
 #define BLYNK_PRINT Serial
 #include <ESP8266WiFi.h>
@@ -8,7 +14,7 @@
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Blynk authentication token and WiFi credentials
-char auth[] = "xKLFgcHUQUg9Lg08_0CZaZRSIkWmY7cy";
+char auth[] = "cwmnA7Jvevb3o2NgOxtRNrCI6MLlOXNi";
 char ssid[] = "k.mani";
 char pass[] = "12345678";
 
@@ -136,27 +142,27 @@ void checkPhysicalButton() {
 void checkTemperature() {
   float temperature = dht.readTemperature();
   
-  if (!isnan(temperature) && temperature > 30.0) {
+  if (!isnan(temperature) && temperature < 30.0) {
     digitalWrite(FAN_RELAY_PIN, HIGH);
     fanRelayState = HIGH;
-    lcd.setCursor(0, 1);
-    lcd.print("Fan: ON ");
+       lcd.setCursor(5, 1);
+        lcd.print("F:OFF");
   } else {
     digitalWrite(FAN_RELAY_PIN, LOW);
     fanRelayState = LOW;
-    lcd.setCursor(0, 1);
-    lcd.print("Fan: OFF");
+    lcd.setCursor(5, 1);
+    lcd.print("F:ON  ");
   }
 }
 
 void loop() {
   if (PIR_ToggleValue == 1) {
-    lcd.setCursor(5, 1);
-    lcd.print("M:ON ");
+    // lcd.setCursor(5, 1);
+    // // lcd.print("M:ON ");
     PIRsensor();
   } else {
-    lcd.setCursor(5, 1);
-    lcd.print("M:OFF");
+    // lcd.setCursor(5, 1);
+    // lcd.print("M:OFF");
     WidgetLED LED(V5);
     LED.off();
   }
